@@ -23,6 +23,7 @@ function App() {
 
   const [dirty, setDirty] = useState(false);
   const [variables, setVariables] = useState({});
+  const [connectionList, setConnectionList] = useState<string[]>([]);
 
   const [edit, setEdit] = useState(false);
 
@@ -41,30 +42,44 @@ function App() {
     }
   }, [server]);
 
+  const addConnectionsList = useCallback(
+    (val: string) => {
+      setConnectionList([...connectionList, val]);
+    },
+    [connectionList]
+  );
+
   const save = (newRndData: object) => {
     params.set('data', JSONCrush.crush(JSON.stringify(newRndData)));
     window.location.search = params.toString();
   };
 
+  const interval = Number(params.get('interval') ?? 1) * 1000;
   useEffect(() => {
     const intervafl = setInterval(() => {
-      socket?.emit(
-        'variables:instance-values',
-        'internal',
-        (err: Error, res: unknown) => {
-          if (err) {
-            console.error(err);
-          } else {
-            setVariables({ internal: res });
+      for (const index in connectionList) {
+        const connection = connectionList[index];
+        socket?.emit(
+          'variables:instance-values',
+          [connection],
+          (err: Error, res: unknown) => {
+            if (err) {
+              console.error(err);
+            } else {
+              setVariables((v) => {
+                return { ...v, [connection]: res };
+              });
+            }
           }
-        }
-      );
-    }, 1000);
+        );
+      }
+    }, interval);
 
     return () => {
+      console.log('clear interval');
       clearInterval(intervafl);
     };
-  }, []);
+  }, [interval, connectionList]);
 
   const setRndPosition = useCallback(
     (id: keyof RnDObject, x: number, y: number) => {
@@ -128,9 +143,9 @@ function App() {
       ...rndData,
       [newId]: {
         id: newId,
-        size: { width: '70px', height: '70px' },
-        position: { x: 0, y: 0 },
-        data: 'internal:time_hms',
+        size: { width: '700px', height: '70px' },
+        position: { x: 10, y: 0 },
+        data: 'Pre $(internal:time_hms) Post',
       },
     };
     setRndObject(obj);
@@ -165,7 +180,12 @@ function App() {
               className={style.data}
               style={{ fontSize: elm.size?.height ?? '70px' }}
             >
-              {getVariable(elm.data, variables)}
+              {getVariable(
+                elm.data,
+                variables,
+                connectionList,
+                addConnectionsList
+              )}
             </div>
           )}
           {edit && (
@@ -206,16 +226,48 @@ function App() {
 
 export default App;
 
-function getVariable(key: string, variables: object) {
+// https://github.com/bitfocus/companion/blob/3a38cb00138637f323536383904ab5a56fffc032/companion/lib/Instance/Variable.js#L46
+function getVariable(
+  key: string,
+  variables: object,
+  connectionsList: string[], //TODO: how to unsubscribe
+  addConnectionsList: (val: string) => void
+) {
   if (!key || typeof key !== 'string') {
-    return 'N/A';
+    return String(key);
   }
-  const [a, b] = key.split(':');
-  if (a in variables) {
-    const group = variables[a as keyof typeof variables];
-    if (b in group) {
-      return group[b];
-    }
+
+  const reg = /\$\(([^:$)]+):([^)$]+)\)/;
+
+  const match = reg.exec(key);
+
+  if (!match) {
+    return key;
   }
-  return 'N/A';
+
+  const fullId = match[0];
+  const connectionLabel = match[1];
+  const variableId = match[2];
+
+  console.log(variables);
+
+  if (!connectionsList.some((val) => connectionLabel == val)) {
+    addConnectionsList(connectionLabel);
+    console.info(connectionLabel, 'not in connection list adding');
+    return key.replace(fullId, 'N/A');
+  }
+
+  if (!(connectionLabel in variables)) {
+    console.warn(connectionLabel, 'still not found in returned variables');
+    return key.replace(fullId, 'N/A');
+  }
+
+  const connectionVariable =
+    variables[connectionLabel as keyof typeof variables];
+
+  if (!connectionVariable || !(variableId in connectionVariable)) {
+    return key.replace(fullId, 'N/A');
+  }
+
+  return key.replace(fullId, connectionVariable[variableId]);
 }
