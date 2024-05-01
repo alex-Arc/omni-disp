@@ -30,4 +30,4 @@ jobs:
         with:
           overwrite: true
           name: OmniDips
-          files: ./dist
+          path: ./dist
