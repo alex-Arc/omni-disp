@@ -29,5 +29,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           overwrite: true
-          name: OmniDips
+          name: OmniDisp
           path: ./dist
