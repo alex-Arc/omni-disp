@@ -1,0 +1,32 @@
+.rndElement {
+  border: 2px;
+  border-color: gray;
+  background-color: black;
+
+  .data {
+    width: 100%;
+    height: 100%;
+    white-space: nowrap;
+    overflow: clip;
+    font-family: monospace;
+    line-height: 90%;
+  }
+}
+
+.editRow {
+  font-size: large;
+  position: absolute;
+  top: 1em;
+  left: 1em;
+  opacity: 0;
+}
+.editRow:hover {
+  opacity: 100%;
+}
+
+.editButton .editButtonActive {
+}
+
+.editButtonActive {
+  background-color: #646cff;
+}
