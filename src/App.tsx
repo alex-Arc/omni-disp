@@ -35,9 +35,13 @@ function App() {
     }
   }, [data]);
 
-  const server = params.get('server');
+  const server = params.get('server'); //TODO: get default server
   useMemo(() => {
+    if (socket?.active) {
+      socket.close();
+    }
     if (server) {
+      console.log('companion ws socket', server);
       socket = io(server);
     }
   }, [server]);
@@ -60,7 +64,7 @@ function App() {
       for (const index in connectionList) {
         const connection = connectionList[index];
         socket?.emit(
-          'variables:instance-values',
+          'variables:connection-values',
           [connection],
           (err: Error, res: unknown) => {
             if (err) {
@@ -175,19 +179,14 @@ function App() {
             setRndSize(elm.id, ref.style.width, ref.style.height, position);
           }}
         >
-          {!edit && (
-            <div
-              className={style.data}
-              style={{ fontSize: elm.size?.height ?? '70px' }}
-            >
-              {getVariable(
-                elm.data,
-                variables,
-                connectionList,
-                addConnectionsList
-              )}
-            </div>
-          )}
+          {!edit &&
+            TransformVariable(
+              elm.data,
+              variables,
+              connectionList,
+              addConnectionsList,
+              elm.size?.height ?? '70px'
+            )}
           {edit && (
             <div>
               <button
@@ -227,11 +226,12 @@ function App() {
 export default App;
 
 // https://github.com/bitfocus/companion/blob/3a38cb00138637f323536383904ab5a56fffc032/companion/lib/Instance/Variable.js#L46
-function getVariable(
+function TransformVariable(
   key: string,
   variables: object,
   connectionsList: string[], //TODO: how to unsubscribe
-  addConnectionsList: (val: string) => void
+  addConnectionsList: (val: string) => void,
+  height: string
 ) {
   if (!key || typeof key !== 'string') {
     return String(key);
@@ -249,25 +249,47 @@ function getVariable(
   const connectionLabel = match[1];
   const variableId = match[2];
 
-  console.log(variables);
-
   if (!connectionsList.some((val) => connectionLabel == val)) {
     addConnectionsList(connectionLabel);
     console.info(connectionLabel, 'not in connection list adding');
-    return key.replace(fullId, 'N/A');
+    return <span>{key.replace(fullId, 'N/A')}</span>;
   }
 
   if (!(connectionLabel in variables)) {
     console.warn(connectionLabel, 'still not found in returned variables');
-    return key.replace(fullId, 'N/A');
+    return <span>{key.replace(fullId, 'N/A')}</span>;
   }
 
   const connectionVariable =
     variables[connectionLabel as keyof typeof variables];
 
   if (!connectionVariable || !(variableId in connectionVariable)) {
-    return key.replace(fullId, 'N/A');
+    return <span>{key.replace(fullId, 'N/A')}</span>;
   }
 
-  return key.replace(fullId, connectionVariable[variableId]);
+  const data = key.replace(fullId, connectionVariable[variableId]);
+
+  return NewLine(data, height);
+}
+
+function NewLine(data: string, height: string) {
+  const lines = data.split('\\n');
+
+  const fullH = Number(height.replace('px', ''));
+  const fontSize = isNaN(fullH)
+    ? `${70 / lines.length}px`
+    : `${fullH / lines.length}px`;
+
+  return (
+    <div className={style.data} style={{ fontSize }}>
+      {lines.map((value) => {
+        return (
+          <span>
+            {value}
+            <br />
+          </span>
+        );
+      })}
+    </div>
+  );
 }
